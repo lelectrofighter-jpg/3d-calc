@@ -205,19 +205,19 @@
             <option value="100,18">Anycubic Kobra 3 S1 (100W)</option>
             <option value="100,18">Anycubic Kobra 3 S1 Combo (100W)</option>
             <option value="120,25">Bambu Lab P2S (120W)</option>
-            <option value="100,22">Bambu Lab P1P/P1S (100W)</option>
-            <option value="110,30">Bambu Lab X1-Carbon (110W)</option>
+            <option value="110,25">Bambu Lab P1P/P1S (110W)</option>
+            <option value="110,25">Bambu Lab X1-Carbon (110W)</option>
             <option value="95,18">Bambu Lab A1 (95W)</option>
             <option value="80,18">Bambu Lab A1 mini (80W)</option>
             <option value="150,18">Flashforge AD5X (Adventurer 5M/Pro) (150W)</option>
             <option value="100,25">Creality K1/K1C (100W)</option>
             <option value="100,25">Creality K1 Max (100W)</option>
-            <option value="125,15">Creality Ender 3 V3 (125W)</option>
+            <option value="100,15">Creality Ender 3 V3 (100W)</option>
             <option value="100,15">Creality Ender-3 V3 SE (100W)</option>
             <option value="100,15">Creality Ender-3 V3 KE (100W)</option>
             <option value="100,15">Anycubic Kobra 2 Neo (100W)</option>
             <option value="1800,50">Elegoo OrangeStorm Giga (1800W)</option>
-            <option value="450,15">Elegoo Neptune 4 Max (450W)</option>
+            <option value="450,25">Elegoo Neptune 4 Max (450W)</option>
             <option value="130,15">Flashforge (Универсальный) (130W)</option>
             <option value="80,15">Prusa MK4S (80W)</option>
             <option value="custom">Свой принтер (Кастом)</option>
@@ -401,17 +401,21 @@
         return '₽';
       })();
 
-      // базовые курсы: сколько USD/EUR за 1 RUB
-      let rateUsdPerRub = 1 / 92;
-      let rateEurPerRub = 1 / 100;
+      // базовые курсы: сколько RUB за 1 USD/EUR (для деления)
+      let rateRubPerUsd = 92;
+      let rateRubPerEur = 100;
 
       function fetchRates() {
         fetch('https://open.er-api.com/v6/latest/RUB')
           .then(function(r) { return r.json(); })
           .then(function(data) {
             if (data && data.rates) {
-              if (typeof data.rates.USD === 'number') rateUsdPerRub = data.rates.USD;
-              if (typeof data.rates.EUR === 'number') rateEurPerRub = data.rates.EUR;
+              if (typeof data.rates.USD === 'number' && data.rates.USD > 0) {
+                rateRubPerUsd = 1 / data.rates.USD;
+              }
+              if (typeof data.rates.EUR === 'number' && data.rates.EUR > 0) {
+                rateRubPerEur = 1 / data.rates.EUR;
+              }
             }
             update();
           })
@@ -423,14 +427,20 @@
       function rubToCurrent(amountRub) {
         const n = Number(amountRub) || 0;
         if (selectedCurrency === '₽') return n;
-        if (selectedCurrency === '$') return n * rateUsdPerRub;
-        if (selectedCurrency === '€') return n * rateEurPerRub;
+        if (selectedCurrency === '$') return n / rateRubPerUsd;
+        if (selectedCurrency === '€') return n / rateRubPerEur;
         return n;
       }
 
       function formatMoney(value) {
         const n = Number(value) || 0;
-        return Math.round(n).toLocaleString('ru-RU') + ' ' + selectedCurrency;
+        if (selectedCurrency === '₽') {
+          const formatted = Number(n.toFixed(0)).toLocaleString('ru-RU');
+          return formatted + ' ' + selectedCurrency;
+        }
+        // Для $ и € показываем два знака после запятой с точкой
+        const formatted = n.toFixed(2);
+        return formatted + ' ' + selectedCurrency;
       }
 
       function applyCurrencyUI() {
@@ -572,17 +582,6 @@
         if (!multicolor.checked) wasteWeightManual = false;
       }
 
-      multicolorToggle.addEventListener('click', function() {
-        multicolor.checked = !multicolor.checked;
-        syncMulticolorUI();
-        update();
-      });
-
-      multicolor.addEventListener('change', function() {
-        syncMulticolorUI();
-        update();
-      });
-
       wasteWeightInput.addEventListener('input', function() {
         wasteWeightManual = true;
         update();
@@ -609,12 +608,6 @@
         btn.addEventListener('click', onCurrencyClick);
       });
 
-      applyCurrencyUI();
-      syncCustomPrinterUI();
-      syncMulticolorUI();
-      update();
-      fetchRates();
-
       tabCost.addEventListener('click', function() {
         tabCost.classList.add('active');
         tabPrice.classList.remove('active');
@@ -632,7 +625,9 @@
         const w = num(weight.value);
         const t = num(time.value);
         const price = getPrice();
-        const displayPrice = Math.round(price).toLocaleString('ru-RU');
+        const displayPrice = (selectedCurrency === '₽')
+          ? Number(price.toFixed(0)).toLocaleString('ru-RU')
+          : price.toFixed(2);
         const text = '📦 Расчет заказа:\n- Модель: ' + w + 'г.\n- Время: ' + t + 'ч.\n💰 Итоговая стоимость: ' + displayPrice + ' ' + selectedCurrency;
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(text).then(function() {
@@ -732,7 +727,8 @@
         }
       });
 
-      multicolorToggle.addEventListener('click', function() {
+      multicolorToggle.addEventListener('click', function(e) {
+        e.preventDefault();
         multicolor.checked = !multicolor.checked;
         syncMulticolorUI();
         handleUserInput();
