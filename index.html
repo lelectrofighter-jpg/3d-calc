@@ -145,10 +145,50 @@
       color: var(--text-secondary);
     }
     .result-value { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; }
+    /* Переключатель валют */
+    .currency-switch {
+      display: flex;
+      gap: 4px;
+      padding: 4px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      margin-bottom: 12px;
+    }
+    .currency-btn {
+      flex: 1;
+      padding: 10px 12px;
+      border: none;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+      border: 1px solid transparent;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .currency-btn:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.1); }
+    .currency-btn.active {
+      background: rgba(99, 102, 241, 0.35);
+      color: #e0e7ff;
+      border-color: rgba(129, 140, 248, 0.5);
+      box-shadow: 0 0 18px rgba(99, 102, 241, 0.4);
+    }
   </style>
 </head>
 <body class="antialiased">
   <div class="max-w-md mx-auto min-w-0 w-full">
+    <!-- Переключатель валют -->
+    <div class="currency-switch">
+      <button type="button" class="currency-btn active" data-currency="₽" aria-pressed="true">₽</button>
+      <button type="button" class="currency-btn" data-currency="$" aria-pressed="false">$</button>
+      <button type="button" class="currency-btn" data-currency="€" aria-pressed="false">€</button>
+    </div>
     <!-- Вкладки -->
     <div class="glass flex p-1.5 gap-1 mb-5">
       <button type="button" id="tab-cost" class="tab-btn active">Себестоимость</button>
@@ -184,7 +224,7 @@
             <input type="number" id="weight" min="0" step="0.1" placeholder="0" value="0">
           </label>
           <label class="block">
-            <span class="text-sm text-slate-300 mb-1.5 block">Цена пластика (₽/кг)</span>
+            <span class="text-sm text-slate-300 mb-1.5 block">Цена пластика (<span class="currency-symbol">₽</span>/кг)</span>
             <input type="number" id="plasticPrice" min="0" step="1" placeholder="0" value="0">
           </label>
           <div class="flex items-center justify-between gap-3">
@@ -230,11 +270,11 @@
           <input type="number" id="time" min="0" step="0.1" placeholder="0" value="0">
         </label>
         <label class="block">
-          <span class="text-sm text-slate-300 mb-1.5 block">Тариф э/э (₽)</span>
+          <span class="text-sm text-slate-300 mb-1.5 block">Тариф э/э (<span class="currency-symbol">₽</span>)</span>
           <input type="number" id="electricityRate" min="0" step="0.01" placeholder="0" value="0">
         </label>
         <label class="block">
-          <span class="text-sm text-slate-300 mb-1.5 block">Упаковка (₽)</span>
+          <span class="text-sm text-slate-300 mb-1.5 block">Упаковка (<span class="currency-symbol">₽</span>)</span>
           <input type="number" id="packaging" min="0" step="1" placeholder="0" value="0">
         </label>
         <label class="block">
@@ -332,6 +372,33 @@
       const panelPrice = document.getElementById('panel-price');
       const copyBtn = document.getElementById('copyBtn');
 
+      const CURRENCY_STORAGE_KEY = 'calc_currency';
+      let selectedCurrency = (function() {
+        try {
+          const s = localStorage.getItem(CURRENCY_STORAGE_KEY);
+          if (s === '₽' || s === '$' || s === '€') return s;
+        } catch (e) {}
+        return '₽';
+      })();
+
+      function applyCurrencyUI() {
+        document.querySelectorAll('.currency-symbol').forEach(function(el) { el.textContent = selectedCurrency; });
+        document.querySelectorAll('.currency-btn').forEach(function(btn) {
+          const isActive = btn.getAttribute('data-currency') === selectedCurrency;
+          btn.classList.toggle('active', isActive);
+          btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+      }
+
+      document.querySelectorAll('.currency-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          selectedCurrency = btn.getAttribute('data-currency');
+          try { localStorage.setItem(CURRENCY_STORAGE_KEY, selectedCurrency); } catch (e) {}
+          applyCurrencyUI();
+          update();
+        });
+      });
+
       function num(v) { return Math.max(0, parseFloat(v) || 0); }
       function int(v) { return Math.max(0, parseInt(v, 10) || 0); }
 
@@ -408,12 +475,12 @@
         }
         const b = getCostBreakdown();
         const price = getPrice();
-        resultResources.textContent = b.resourceCosts.toFixed(0) + ' ₽';
-        resultBeforeDefect.textContent = b.sumBeforeDefect.toFixed(0) + ' ₽';
+        resultResources.textContent = b.resourceCosts.toFixed(0) + ' ' + selectedCurrency;
+        resultBeforeDefect.textContent = b.sumBeforeDefect.toFixed(0) + ' ' + selectedCurrency;
         resultDefectPct.textContent = b.defectPct;
-        resultDefectCost.textContent = b.defectCost.toFixed(0) + ' ₽';
-        costResult.textContent = b.totalCost.toFixed(0) + ' ₽';
-        priceResult.textContent = price.toFixed(0) + ' ₽';
+        resultDefectCost.textContent = b.defectCost.toFixed(0) + ' ' + selectedCurrency;
+        costResult.textContent = b.totalCost.toFixed(0) + ' ' + selectedCurrency;
+        priceResult.textContent = price.toFixed(0) + ' ' + selectedCurrency;
       }
 
       function syncMulticolorUI() {
@@ -446,6 +513,7 @@
           el.addEventListener('change', update);
         }
       });
+      applyCurrencyUI();
       syncMulticolorUI();
       update();
 
@@ -466,7 +534,7 @@
         const w = num(weight.value);
         const t = num(time.value);
         const price = getPrice().toFixed(0);
-        const text = '📦 Расчет заказа:\n- Модель: ' + w + 'г.\n- Время: ' + t + 'ч.\n💰 Итоговая стоимость: ' + price + '₽';
+        const text = '📦 Расчет заказа:\n- Модель: ' + w + 'г.\n- Время: ' + t + 'ч.\n💰 Итоговая стоимость: ' + price + selectedCurrency;
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(text).then(function() {
             copyBtn.textContent = 'Скопировано!';
