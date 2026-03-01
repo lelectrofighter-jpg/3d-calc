@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Калькулятор 3D-печати</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg-deep: #0f172a;
+      --bg-spot: rgba(67, 56, 202, 0.35);
+      --glass-bg: rgba(255, 255, 255, 0.08);
+      --glass-border: rgba(255, 255, 255, 0.2);
+      --text-primary: #f8fafc;
+      --text-secondary: #cbd5e1;
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; margin: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      padding: 16px;
+      padding-bottom: 24px;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+    /* Фон с размытыми пятнами */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background: 
+        radial-gradient(ellipse 80% 50% at 20% 20%, var(--bg-spot) 0%, transparent 50%),
+        radial-gradient(ellipse 60% 40% at 80% 80%, rgba(79, 70, 229, 0.25) 0%, transparent 45%),
+        radial-gradient(ellipse 50% 30% at 50% 50%, rgba(99, 102, 241, 0.15) 0%, transparent 40%);
+      pointer-events: none;
+    }
+    /* Карточки — матовое стекло */
+    .glass {
+      background: var(--glass-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+    }
+    .glass-btn {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 16px;
+      color: var(--text-primary);
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .glass-btn:hover, .glass-btn:active {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+    input, select {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      color: var(--text-primary);
+      padding: 12px 14px;
+      width: 100%;
+      font-size: 1rem;
+    }
+    input::placeholder { color: rgba(203, 213, 225, 0.6); }
+    input:focus, select:focus {
+      outline: none;
+      border-color: rgba(255, 255, 255, 0.35);
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
+    }
+    select option { background: #1e293b; color: #f8fafc; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    /* Toggle Switch — плавно на мобильных */
+    .toggle-switch {
+      flex-shrink: 0;
+      width: 48px;
+      height: 28px;
+      border-radius: 14px;
+      background: rgba(148, 163, 184, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+      position: relative;
+      transition: background 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .toggle-switch[aria-checked="true"] {
+      background: rgba(34, 197, 94, 0.6);
+      border-color: rgba(34, 197, 94, 0.5);
+      box-shadow: 0 0 20px rgba(34, 197, 94, 0.4);
+    }
+    .toggle-thumb {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+      transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .toggle-switch[aria-checked="true"] .toggle-thumb {
+      transform: translateX(20px);
+    }
+    /* AMS fields: плавное раскрытие по высоте контента */
+    .ams-fields {
+      display: grid;
+      grid-template-rows: 0fr;
+      opacity: 0;
+      transition: grid-template-rows 0.4s ease, opacity 0.3s ease;
+    }
+    .ams-fields.ams-visible {
+      grid-template-rows: 1fr;
+      opacity: 1;
+    }
+    .ams-fields-inner {
+      overflow: hidden;
+      min-height: 0;
+      padding-top: 0.5rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .ams-fields-inner .block { margin-bottom: 0.5rem; }
+    .ams-fields-inner .block:last-child { margin-bottom: 0; }
+    .ams-fields-inner .text-xs.mt-1 { margin-top: 0.25rem; }
+    .tab-btn {
+      flex: 1;
+      padding: 12px 16px;
+      border-radius: 16px;
+      font-weight: 600;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+    .tab-btn.active {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+    .tab-btn:not(.active) {
+      color: var(--text-secondary);
+    }
+    .result-value { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; }
+  </style>
+</head>
+<body class="antialiased">
+  <div class="max-w-md mx-auto min-w-0 w-full">
+    <!-- Вкладки -->
+    <div class="glass flex p-1.5 gap-1 mb-5">
+      <button type="button" id="tab-cost" class="tab-btn active">Себестоимость</button>
+      <button type="button" id="tab-price" class="tab-btn">Цена</button>
+    </div>
+
+    <!-- Контент: Себестоимость -->
+    <div id="panel-cost" class="space-y-4">
+      <div class="glass p-5 space-y-4">
+        <label class="block">
+          <span class="text-sm text-slate-300 mb-1.5 block">Принтер</span>
+          <select id="printer" class="w-full">
+            <option value="160,15">Anycubic Kobra 3 / V2 Combo (160W)</option>
+            <option value="160,15">Anycubic Kobra 3 S1 (160W)</option>
+            <option value="260,18">Anycubic Kobra 3 S1 Combo (260W)</option>
+            <option value="120,25">Bambu Lab P2S (120W)</option>
+            <option value="110,25">Bambu Lab P1S/X1C (110W)</option>
+            <option value="95,12">Bambu Lab A1 (95W)</option>
+            <option value="80,12">Bambu Lab A1 mini (80W)</option>
+            <option value="150,18">Flashforge AD5X (Adventurer 5M/Pro) (150W)</option>
+            <option value="150,18">Creality K1 / K1C / K1 Max (Hi-серия) (150W)</option>
+            <option value="120,15">Creality K1/K1C (120W)</option>
+            <option value="180,15">Creality K1 Max (180W)</option>
+            <option value="125,15">Creality Ender 3 V3 (125W)</option>
+            <option value="130,15">Flashforge (Универсальный) (130W)</option>
+            <option value="80,15">Prusa MK4S (80W)</option>
+          </select>
+        </label>
+        <div class="glass p-4 rounded-2xl space-y-4 border border-white/10">
+          <div class="text-slate-300 text-sm font-semibold">Материал</div>
+          <label class="block">
+            <span class="text-sm text-slate-300 mb-1.5 block">Вес (г)</span>
+            <input type="number" id="weight" min="0" step="0.1" placeholder="0" value="0">
+          </label>
+          <label class="block">
+            <span class="text-sm text-slate-300 mb-1.5 block">Цена пластика (₽/кг)</span>
+            <input type="number" id="plasticPrice" min="0" step="1" placeholder="0" value="0">
+          </label>
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-sm text-slate-300">Многоцветная печать (AMS/ACE)</span>
+            <button type="button" id="multicolorToggle" class="toggle-switch" role="switch" aria-checked="false" title="Многоцветная печать">
+              <span class="toggle-thumb"></span>
+            </button>
+          </div>
+          <input type="checkbox" id="multicolor" class="sr-only" tabindex="-1" aria-hidden="true">
+          <div id="amsFields" class="ams-fields">
+            <div class="ams-fields-inner">
+              <label class="block">
+                <span class="text-sm text-slate-300 mb-1 block">Количество цветов</span>
+                <select id="colorCount">
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                </select>
+              </label>
+              <label class="block">
+                <span class="text-sm text-slate-300 mb-1 block">Слоев со сменой цвета</span>
+                <input type="number" id="colorChangeLayers" min="0" step="1" placeholder="0" value="0">
+              </label>
+              <label class="block">
+                <span class="text-sm text-slate-300 mb-1 block">Слив на 1 смену (г)</span>
+                <input type="number" id="purgePerChange" min="0" step="0.1" placeholder="0.6" value="0.6">
+              </label>
+              <label class="block">
+                <span class="text-sm text-slate-300 mb-1 block">Вес отходов (г)</span>
+                <input type="number" id="wasteWeightInput" min="0" step="0.1" placeholder="0" value="0">
+                <span class="text-slate-500 text-xs mt-1 block">Можно ввести вручную из слайсера</span>
+              </label>
+              <label class="block">
+                <span class="text-sm text-slate-300 mb-1 block">Вес башни чистки (г)</span>
+                <input type="number" id="primeTowerWeight" min="0" step="0.1" placeholder="0" value="0">
+                <span class="text-slate-500 text-xs mt-1 block">Prime Tower из слайсера</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <label class="block">
+          <span class="text-sm text-slate-300 mb-1.5 block">Время (ч)</span>
+          <input type="number" id="time" min="0" step="0.1" placeholder="0" value="0">
+        </label>
+        <label class="block">
+          <span class="text-sm text-slate-300 mb-1.5 block">Тариф э/э (₽)</span>
+          <input type="number" id="electricityRate" min="0" step="0.01" placeholder="0" value="0">
+        </label>
+        <label class="block">
+          <span class="text-sm text-slate-300 mb-1.5 block">Упаковка (₽)</span>
+          <input type="number" id="packaging" min="0" step="1" placeholder="0" value="0">
+        </label>
+        <label class="block">
+          <span class="text-sm text-slate-300 mb-1.5 block">Брак (%)</span>
+          <input type="number" id="defect" min="0" max="100" step="1" placeholder="4" value="0">
+        </label>
+      </div>
+      <div class="glass p-5">
+        <div class="text-slate-300 text-sm font-semibold mb-3 text-center">Результаты</div>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400">Затраты</span>
+            <span id="resultResources" class="font-medium text-slate-200">0 ₽</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400">До брака</span>
+            <span id="resultBeforeDefect" class="font-medium text-slate-200">0 ₽</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400">Брак (<span id="resultDefectPct">0</span>%)</span>
+            <span id="resultDefectCost" class="font-medium text-slate-200">0 ₽</span>
+          </div>
+          <div class="border-t border-white/10 pt-2 mt-2 flex justify-between items-center">
+            <span class="text-slate-300 font-medium">Итого</span>
+            <span id="costResult" class="result-value text-lg">0 ₽</span>
+          </div>
+        </div>
+        <p class="text-slate-400 text-xs mt-3 leading-snug text-center">В стоимость включен износ оборудования согласно выбранной модели.</p>
+      </div>
+    </div>
+
+    <!-- Контент: Цена -->
+    <div id="panel-price" class="hidden space-y-4">
+      <div class="glass p-5 space-y-4">
+        <label class="block">
+          <span class="text-sm text-slate-300 mb-1.5 block">Наценка (%)</span>
+          <input type="number" id="markup" min="0" step="1" placeholder="0" value="0">
+        </label>
+      </div>
+      <div class="glass p-5 text-center">
+        <div class="text-slate-300 text-sm mb-1">Цена для клиента</div>
+        <div id="priceResult" class="result-value">0 ₽</div>
+      </div>
+      <button type="button" id="copyBtn" class="glass-btn w-full py-3 px-4 font-semibold">
+        Скопировать расчет
+      </button>
+    </div>
+
+    <!-- Футер -->
+    <footer class="mt-8 flex flex-col gap-3">
+      <a href="https://t.me/pechatnikjurec" target="_blank" rel="noopener" class="glass-btn block text-center py-3 px-4 no-underline">
+        📢 Канал: Печатники и Печатницы
+      </a>
+      <a href="https://t.me/pechatnikovchat" target="_blank" rel="noopener" class="glass-btn block text-center py-3 px-4 no-underline">
+        💬 Чат сообщества
+      </a>
+    </footer>
+  </div>
+
+  <script>
+    (function() {
+      const Telegram = window.Telegram?.WebApp;
+      if (Telegram) {
+        Telegram.ready();
+        Telegram.expand();
+        document.documentElement.style.setProperty('--tg-theme-bg-color', 'transparent');
+      }
+
+      const printers = document.getElementById('printer');
+      const weight = document.getElementById('weight');
+      const plasticPrice = document.getElementById('plasticPrice');
+      const multicolor = document.getElementById('multicolor');
+      const multicolorToggle = document.getElementById('multicolorToggle');
+      const amsFields = document.getElementById('amsFields');
+      const colorCount = document.getElementById('colorCount');
+      const colorChangeLayers = document.getElementById('colorChangeLayers');
+      const purgePerChange = document.getElementById('purgePerChange');
+      const wasteWeightInput = document.getElementById('wasteWeightInput');
+      const primeTowerWeight = document.getElementById('primeTowerWeight');
+      const time = document.getElementById('time');
+      let wasteWeightManual = false;
+      const electricityRate = document.getElementById('electricityRate');
+      const packaging = document.getElementById('packaging');
+      const defect = document.getElementById('defect');
+      const markup = document.getElementById('markup');
+      const costResult = document.getElementById('costResult');
+      const resultResources = document.getElementById('resultResources');
+      const resultBeforeDefect = document.getElementById('resultBeforeDefect');
+      const resultDefectPct = document.getElementById('resultDefectPct');
+      const resultDefectCost = document.getElementById('resultDefectCost');
+      const priceResult = document.getElementById('priceResult');
+      const tabCost = document.getElementById('tab-cost');
+      const tabPrice = document.getElementById('tab-price');
+      const panelCost = document.getElementById('panel-cost');
+      const panelPrice = document.getElementById('panel-price');
+      const copyBtn = document.getElementById('copyBtn');
+
+      function num(v) { return Math.max(0, parseFloat(v) || 0); }
+      function int(v) { return Math.max(0, parseInt(v, 10) || 0); }
+
+      function getPrinterPowerAndAmortization() {
+        const v = printers.value;
+        const parts = v.split(',');
+        const power = num(parts[0]);
+        const amortization = parts.length > 1 ? num(parts[1]) : 15;
+        return { power: power, amortizationPerHour: amortization };
+      }
+
+      function getCalculatedWasteWeight() {
+        const colors = int(colorCount.value);
+        const layers = int(colorChangeLayers.value);
+        const purge = num(purgePerChange.value);
+        const changes = Math.max(0, (colors - 1) * layers);
+        return changes * purge;
+      }
+
+      function getWasteWeight() {
+        if (!multicolor.checked) return 0;
+        if (wasteWeightManual) return num(wasteWeightInput.value);
+        return getCalculatedWasteWeight();
+      }
+
+      function getAmortizationPerHour() {
+        let base = getPrinterPowerAndAmortization().amortizationPerHour;
+        if (!multicolor.checked) return base;
+        const colors = int(colorCount.value);
+        if (colors === 2) return base + 5;
+        if (colors === 3 || colors === 4) return base + 8;
+        return base;
+      }
+
+      function getPrimeTowerWeight() {
+        return multicolor.checked ? num(primeTowerWeight.value) : 0;
+      }
+
+      function getCostBreakdown() {
+        const w = num(weight.value);
+        const waste = getWasteWeight();
+        const tower = getPrimeTowerWeight();
+        const effectiveWeight = w + waste + tower;
+        const pp = num(plasticPrice.value);
+        const t = num(time.value);
+        const rate = num(electricityRate.value);
+        const pack = num(packaging.value);
+        const defectPct = int(defect.value);   // 4 значит 4%
+        const pa = getPrinterPowerAndAmortization();
+        const power = pa.power;
+        const plastic = (effectiveWeight / 1000) * pp;
+        const electricity = t * (power / 1000) * rate;
+        const amortization = t * getAmortizationPerHour();
+        const resourceCosts = plastic + electricity + amortization;
+        const sumBeforeDefect = resourceCosts;
+        const defectCost = sumBeforeDefect * (defectPct / 100);
+        const totalCost = sumBeforeDefect + defectCost + pack;
+        return { resourceCosts, sumBeforeDefect, defectCost, totalCost, defectPct };
+      }
+
+      function getCost() {
+        return getCostBreakdown().totalCost;
+      }
+
+      function getPrice() {
+        const cost = getCost();
+        const m = num(markup.value);
+        return cost * (1 + m / 100);
+      }
+
+      function update() {
+        if (multicolor.checked && !wasteWeightManual) {
+          wasteWeightInput.value = getCalculatedWasteWeight().toFixed(1);
+        }
+        const b = getCostBreakdown();
+        const price = getPrice();
+        resultResources.textContent = b.resourceCosts.toFixed(0) + ' ₽';
+        resultBeforeDefect.textContent = b.sumBeforeDefect.toFixed(0) + ' ₽';
+        resultDefectPct.textContent = b.defectPct;
+        resultDefectCost.textContent = b.defectCost.toFixed(0) + ' ₽';
+        costResult.textContent = b.totalCost.toFixed(0) + ' ₽';
+        priceResult.textContent = price.toFixed(0) + ' ₽';
+      }
+
+      function syncMulticolorUI() {
+        multicolorToggle.setAttribute('aria-checked', multicolor.checked ? 'true' : 'false');
+        amsFields.classList.toggle('ams-visible', multicolor.checked);
+        if (!multicolor.checked) wasteWeightManual = false;
+      }
+
+      multicolorToggle.addEventListener('click', function() {
+        multicolor.checked = !multicolor.checked;
+        syncMulticolorUI();
+        update();
+      });
+
+      multicolor.addEventListener('change', function() {
+        syncMulticolorUI();
+        update();
+      });
+
+      wasteWeightInput.addEventListener('input', function() { wasteWeightManual = true; update(); });
+      wasteWeightInput.addEventListener('change', function() { wasteWeightManual = true; update(); });
+
+      [colorCount, colorChangeLayers, purgePerChange].forEach(function(el) {
+        el.addEventListener('change', function() { wasteWeightManual = false; });
+      });
+
+      [printers, weight, plasticPrice, time, electricityRate, packaging, defect, markup, colorCount, colorChangeLayers, purgePerChange, wasteWeightInput, primeTowerWeight].forEach(function(el) {
+        if (el) {
+          el.addEventListener('input', update);
+          el.addEventListener('change', update);
+        }
+      });
+      syncMulticolorUI();
+      update();
+
+      tabCost.addEventListener('click', function() {
+        tabCost.classList.add('active');
+        tabPrice.classList.remove('active');
+        panelCost.classList.remove('hidden');
+        panelPrice.classList.add('hidden');
+      });
+      tabPrice.addEventListener('click', function() {
+        tabPrice.classList.add('active');
+        tabCost.classList.remove('active');
+        panelPrice.classList.remove('hidden');
+        panelCost.classList.add('hidden');
+      });
+
+      copyBtn.addEventListener('click', function() {
+        const w = num(weight.value);
+        const t = num(time.value);
+        const price = getPrice().toFixed(0);
+        const text = '📦 Расчет заказа:\n- Модель: ' + w + 'г.\n- Время: ' + t + 'ч.\n💰 Итоговая стоимость: ' + price + '₽';
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function() {
+            copyBtn.textContent = 'Скопировано!';
+            setTimeout(function() { copyBtn.textContent = 'Скопировать расчет'; }, 2000);
+          }).catch(function() { fallbackCopy(text); });
+        } else {
+          fallbackCopy(text);
+        }
+      });
+
+      function fallbackCopy(str) {
+        const ta = document.createElement('textarea');
+        ta.value = str;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand('copy');
+          copyBtn.textContent = 'Скопировано!';
+          setTimeout(function() { copyBtn.textContent = 'Скопировать расчет'; }, 2000);
+        } catch (e) {}
+        document.body.removeChild(ta);
+      }
+    })();
+  </script>
+</body>
+</html>
