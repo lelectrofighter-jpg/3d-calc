@@ -201,27 +201,39 @@
         <label class="block">
           <span class="text-sm text-slate-300 mb-1.5 block">Принтер</span>
           <select id="printer" class="w-full">
-            <option value="160,15">Anycubic Kobra 3 / V2 Combo (160W)</option>
-            <option value="160,15">Anycubic Kobra 3 S1 (160W)</option>
-            <option value="260,18">Anycubic Kobra 3 S1 Combo (260W)</option>
+            <option value="100,18">Anycubic Kobra 3 / V2 Combo (100W)</option>
+            <option value="100,18">Anycubic Kobra 3 S1 (100W)</option>
+            <option value="100,18">Anycubic Kobra 3 S1 Combo (100W)</option>
             <option value="120,25">Bambu Lab P2S (120W)</option>
-            <option value="110,25">Bambu Lab P1S/X1C (110W)</option>
-            <option value="95,12">Bambu Lab A1 (95W)</option>
-            <option value="80,12">Bambu Lab A1 mini (80W)</option>
+            <option value="100,22">Bambu Lab P1P/P1S (100W)</option>
+            <option value="110,30">Bambu Lab X1-Carbon (110W)</option>
+            <option value="95,18">Bambu Lab A1 (95W)</option>
+            <option value="80,18">Bambu Lab A1 mini (80W)</option>
             <option value="150,18">Flashforge AD5X (Adventurer 5M/Pro) (150W)</option>
-            <option value="150,18">Creality K1 / K1C / K1 Max (Hi-серия) (150W)</option>
-            <option value="120,15">Creality K1/K1C (120W)</option>
-            <option value="180,15">Creality K1 Max (180W)</option>
+            <option value="100,25">Creality K1/K1C (100W)</option>
+            <option value="100,25">Creality K1 Max (100W)</option>
             <option value="125,15">Creality Ender 3 V3 (125W)</option>
-            <option value="350,15">Creality Ender-3 V3 SE (350W)</option>
-            <option value="350,15">Creality Ender-3 V3 KE (350W)</option>
-            <option value="400,15">Anycubic Kobra 2 Neo (400W)</option>
-            <option value="1800,20">Elegoo OrangeStorm Giga (1800W)</option>
+            <option value="100,15">Creality Ender-3 V3 SE (100W)</option>
+            <option value="100,15">Creality Ender-3 V3 KE (100W)</option>
+            <option value="100,15">Anycubic Kobra 2 Neo (100W)</option>
+            <option value="1800,50">Elegoo OrangeStorm Giga (1800W)</option>
             <option value="450,15">Elegoo Neptune 4 Max (450W)</option>
             <option value="130,15">Flashforge (Универсальный) (130W)</option>
             <option value="80,15">Prusa MK4S (80W)</option>
+            <option value="custom">Свой принтер (Кастом)</option>
           </select>
         </label>
+        <div id="customPrinterFields" class="glass p-4 rounded-2xl border border-indigo-400/40 mt-2 space-y-3 hidden">
+          <div class="text-slate-300 text-sm font-semibold">Свой принтер (Кастом)</div>
+          <label class="block">
+            <span class="text-sm text-slate-300 mb-1.5 block">Мощность (Вт)</span>
+            <input type="number" id="customPower" min="0" step="1" placeholder="350" value="0">
+          </label>
+          <label class="block">
+            <span class="text-sm text-slate-300 mb-1.5 block">Износ в час (<span class="currency-symbol">₽</span>)</span>
+            <input type="number" id="customWear" min="0" step="1" placeholder="15" value="0">
+          </label>
+        </div>
         <div class="glass p-4 rounded-2xl space-y-4 border border-white/10">
           <div class="text-slate-300 text-sm font-semibold">Материал</div>
           <label class="block">
@@ -359,6 +371,9 @@
       const purgePerChange = document.getElementById('purgePerChange');
       const wasteWeightInput = document.getElementById('wasteWeightInput');
       const primeTowerWeight = document.getElementById('primeTowerWeight');
+      const customPower = document.getElementById('customPower');
+      const customWear = document.getElementById('customWear');
+      const customPrinterFields = document.getElementById('customPrinterFields');
       const time = document.getElementById('time');
       let wasteWeightManual = false;
       const electricityRate = document.getElementById('electricityRate');
@@ -445,10 +460,18 @@
 
       function getPrinterPowerAndAmortization() {
         const v = printers.value;
+        if (v === 'custom') {
+          return {
+            power: num(customPower.value),
+            amortizationRubPerHour: 0,
+            customAmortizationPerHour: num(customWear.value),
+            isCustom: true
+          };
+        }
         const parts = v.split(',');
         const power = num(parts[0]);
         const amortizationRub = parts.length > 1 ? num(parts[1]) : 15;
-        return { power: power, amortizationRubPerHour: amortizationRub };
+        return { power: power, amortizationRubPerHour: amortizationRub, isCustom: false };
       }
 
       function getCalculatedWasteWeight() {
@@ -467,11 +490,17 @@
 
       function getAmortizationPerHour() {
         const info = getPrinterPowerAndAmortization();
+        if (info.isCustom) {
+          // Пользователь сам задаёт износ в текущей валюте
+          let wear = info.customAmortizationPerHour;
+          if (multicolor.checked) {
+            wear *= 1.3; // +30% нагрузки при AMS
+          }
+          return wear;
+        }
         let rub = info.amortizationRubPerHour;
         if (multicolor.checked) {
-          const colors = int(colorCount.value);
-          if (colors === 2) rub += 5;
-          else if (colors === 3 || colors === 4) rub += 8;
+          rub *= 1.3; // +30% износа при AMS
         }
         return rubToCurrent(rub);
       }
@@ -532,6 +561,11 @@
         priceResult.textContent = formatMoney(price);
       }
 
+      function syncCustomPrinterUI() {
+        const isCustom = printers.value === 'custom';
+        customPrinterFields.classList.toggle('hidden', !isCustom);
+      }
+
       function syncMulticolorUI() {
         multicolorToggle.setAttribute('aria-checked', multicolor.checked ? 'true' : 'false');
         amsFields.classList.toggle('ams-visible', multicolor.checked);
@@ -564,7 +598,7 @@
         });
       });
 
-      [printers, weight, plasticPrice, time, electricityRate, packaging, defect, markup, colorCount, colorChangeLayers, purgePerChange, wasteWeightInput, primeTowerWeight].forEach(function(el) {
+      [printers, weight, plasticPrice, time, electricityRate, packaging, defect, markup, colorCount, colorChangeLayers, purgePerChange, wasteWeightInput, primeTowerWeight, customPower, customWear].forEach(function(el) {
         if (el) {
           el.addEventListener('input', update);
           el.addEventListener('change', update);
@@ -576,6 +610,7 @@
       });
 
       applyCurrencyUI();
+      syncCustomPrinterUI();
       syncMulticolorUI();
       update();
       fetchRates();
@@ -623,6 +658,106 @@
         } catch (e) {}
         document.body.removeChild(ta);
       }
+
+      // --- Сохранение и восстановление состояния ---
+      const STATE_STORAGE_KEY = 'calc_state_v1';
+
+      function saveState() {
+        const state = {
+          printer: printers.value,
+          weight: weight.value,
+          plasticPrice: plasticPrice.value,
+          time: time.value,
+          electricityRate: electricityRate.value,
+          packaging: packaging.value,
+          defect: defect.value,
+          markup: markup.value,
+          multicolor: multicolor.checked,
+          colorCount: colorCount.value,
+          colorChangeLayers: colorChangeLayers.value,
+          purgePerChange: purgePerChange.value,
+          wasteWeightInput: wasteWeightInput.value,
+          primeTowerWeight: primeTowerWeight.value,
+          customPower: customPower.value,
+          customWear: customWear.value
+        };
+        try {
+          localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify(state));
+        } catch (e) {}
+      }
+
+      function loadState() {
+        let raw;
+        try {
+          raw = localStorage.getItem(STATE_STORAGE_KEY);
+        } catch (e) {
+          raw = null;
+        }
+        if (!raw) return;
+        try {
+          const s = JSON.parse(raw);
+          if (s.printer) printers.value = s.printer;
+          if (s.weight != null) weight.value = s.weight;
+          if (s.plasticPrice != null) plasticPrice.value = s.plasticPrice;
+          if (s.time != null) time.value = s.time;
+          if (s.electricityRate != null) electricityRate.value = s.electricityRate;
+          if (s.packaging != null) packaging.value = s.packaging;
+          if (s.defect != null) defect.value = s.defect;
+          if (s.markup != null) markup.value = s.markup;
+          if (typeof s.multicolor === 'boolean') multicolor.checked = s.multicolor;
+          if (s.colorCount) colorCount.value = s.colorCount;
+          if (s.colorChangeLayers != null) colorChangeLayers.value = s.colorChangeLayers;
+          if (s.purgePerChange != null) purgePerChange.value = s.purgePerChange;
+          if (s.wasteWeightInput != null) wasteWeightInput.value = s.wasteWeightInput;
+          if (s.primeTowerWeight != null) primeTowerWeight.value = s.primeTowerWeight;
+          if (s.customPower != null) customPower.value = s.customPower;
+          if (s.customWear != null) customWear.value = s.customWear;
+        } catch (e) {}
+      }
+
+      // обёртка для пользовательских изменений
+      function handleUserInput() {
+        syncCustomPrinterUI();
+        update();
+        saveState();
+      }
+
+      // переназначаем слушатели на handleUserInput
+      [printers, weight, plasticPrice, time, electricityRate, packaging, defect, markup, colorCount, colorChangeLayers, purgePerChange, wasteWeightInput, primeTowerWeight, customPower, customWear].forEach(function(el) {
+        if (el) {
+          el.removeEventListener('input', update);
+          el.removeEventListener('change', update);
+          el.addEventListener('input', handleUserInput);
+          el.addEventListener('change', handleUserInput);
+        }
+      });
+
+      multicolorToggle.addEventListener('click', function() {
+        multicolor.checked = !multicolor.checked;
+        syncMulticolorUI();
+        handleUserInput();
+      });
+
+      multicolor.addEventListener('change', function() {
+        syncMulticolorUI();
+        handleUserInput();
+      });
+
+      document.querySelectorAll('.currency-btn').forEach(function(btn) {
+        btn.removeEventListener('click', onCurrencyClick);
+        btn.addEventListener('click', function() {
+          onCurrencyClick.call(this);
+          saveState();
+        });
+      });
+
+      // начальная инициализация
+      loadState();
+      applyCurrencyUI();
+      syncCustomPrinterUI();
+      syncMulticolorUI();
+      update();
+      fetchRates();
     })();
   </script>
 </body>
