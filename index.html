@@ -386,8 +386,9 @@
         return '₽';
       })();
 
-      var rateUsdPerRub = 1 / 92;
-      var rateEurPerRub = 1 / 100;
+      // базовые курсы: сколько USD/EUR за 1 RUB
+      let rateUsdPerRub = 1 / 92;
+      let rateEurPerRub = 1 / 100;
 
       function fetchRates() {
         fetch('https://open.er-api.com/v6/latest/RUB')
@@ -399,31 +400,42 @@
             }
             update();
           })
-          .catch(function() { update(); });
+          .catch(function() {
+            update();
+          });
       }
 
-      function formatMoney(valueRub) {
-        var n = Number(valueRub) || 0;
-        if (selectedCurrency === '₽') return Math.round(n).toLocaleString('ru-RU') + ' ₽';
-        if (selectedCurrency === '$') return Math.round(n * rateUsdPerRub).toLocaleString('ru-RU') + ' $';
-        if (selectedCurrency === '€') return Math.round(n * rateEurPerRub).toLocaleString('ru-RU') + ' €';
+      function rubToCurrent(amountRub) {
+        const n = Number(amountRub) || 0;
+        if (selectedCurrency === '₽') return n;
+        if (selectedCurrency === '$') return n * rateUsdPerRub;
+        if (selectedCurrency === '€') return n * rateEurPerRub;
+        return n;
+      }
+
+      function formatMoney(value) {
+        const n = Number(value) || 0;
         return Math.round(n).toLocaleString('ru-RU') + ' ' + selectedCurrency;
       }
 
       function applyCurrencyUI() {
-        document.querySelectorAll('.currency-symbol').forEach(function(el) { el.textContent = selectedCurrency; });
+        document.querySelectorAll('.currency-symbol').forEach(function(el) {
+          el.textContent = selectedCurrency;
+        });
         document.querySelectorAll('.currency-btn').forEach(function(btn) {
-          var isActive = btn.getAttribute('data-currency') === selectedCurrency;
+          const isActive = btn.getAttribute('data-currency') === selectedCurrency;
           btn.classList.toggle('active', isActive);
           btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         });
       }
 
       function onCurrencyClick() {
-        var sym = this.getAttribute('data-currency');
+        const sym = this.getAttribute('data-currency');
         if (sym !== '₽' && sym !== '$' && sym !== '€') return;
         selectedCurrency = sym;
-        try { localStorage.setItem(CURRENCY_STORAGE_KEY, selectedCurrency); } catch (e) {}
+        try {
+          localStorage.setItem(CURRENCY_STORAGE_KEY, selectedCurrency);
+        } catch (e) {}
         applyCurrencyUI();
         update();
       }
@@ -432,18 +444,18 @@
       function int(v) { return Math.max(0, parseInt(v, 10) || 0); }
 
       function getPrinterPowerAndAmortization() {
-        var v = printers.value;
-        var parts = v.split(',');
-        var power = num(parts[0]);
-        var amortization = parts.length > 1 ? num(parts[1]) : 15;
-        return { power: power, amortizationPerHour: amortization };
+        const v = printers.value;
+        const parts = v.split(',');
+        const power = num(parts[0]);
+        const amortizationRub = parts.length > 1 ? num(parts[1]) : 15;
+        return { power: power, amortizationRubPerHour: amortizationRub };
       }
 
       function getCalculatedWasteWeight() {
-        var colors = int(colorCount.value);
-        var layers = int(colorChangeLayers.value);
-        var purge = num(purgePerChange.value);
-        var changes = Math.max(0, (colors - 1) * layers);
+        const colors = int(colorCount.value);
+        const layers = int(colorChangeLayers.value);
+        const purge = num(purgePerChange.value);
+        const changes = Math.max(0, (colors - 1) * layers);
         return changes * purge;
       }
 
@@ -454,12 +466,14 @@
       }
 
       function getAmortizationPerHour() {
-        var base = getPrinterPowerAndAmortization().amortizationPerHour;
-        if (!multicolor.checked) return base;
-        var colors = int(colorCount.value);
-        if (colors === 2) return base + 5;
-        if (colors === 3 || colors === 4) return base + 8;
-        return base;
+        const info = getPrinterPowerAndAmortization();
+        let rub = info.amortizationRubPerHour;
+        if (multicolor.checked) {
+          const colors = int(colorCount.value);
+          if (colors === 2) rub += 5;
+          else if (colors === 3 || colors === 4) rub += 8;
+        }
+        return rubToCurrent(rub);
       }
 
       function getPrimeTowerWeight() {
@@ -467,24 +481,29 @@
       }
 
       function getCostBreakdown() {
-        var w = num(weight.value);
-        var waste = getWasteWeight();
-        var tower = getPrimeTowerWeight();
-        var effectiveWeight = w + waste + tower;
-        var pp = num(plasticPrice.value);
-        var t = num(time.value);
-        var rate = num(electricityRate.value);
-        var pack = num(packaging.value);
-        var defectPct = int(defect.value);
-        var pa = getPrinterPowerAndAmortization();
-        var power = pa.power;
-        var plastic = (effectiveWeight / 1000) * pp;
-        var electricity = t * (power / 1000) * rate;
-        var amortization = t * getAmortizationPerHour();
-        var resourceCosts = plastic + electricity + amortization;
-        var sumBeforeDefect = resourceCosts;
-        var defectCost = sumBeforeDefect * (defectPct / 100);
-        var totalCost = sumBeforeDefect + defectCost + pack;
+        const w = num(weight.value);
+        const waste = getWasteWeight();
+        const tower = getPrimeTowerWeight();
+        const effectiveWeight = w + waste + tower;
+
+        // Все вводимые значения считаются в выбранной валюте
+        const pp = num(plasticPrice.value);        // цена пластика за кг
+        const t = num(time.value);                // часы
+        const rate = num(electricityRate.value);  // тариф э/э за кВт*ч
+        const pack = num(packaging.value);        // упаковка
+        const defectPct = int(defect.value);      // 4 => 4%
+
+        const printerInfo = getPrinterPowerAndAmortization();
+        const power = printerInfo.power;          // Ватты
+
+        const plastic = (effectiveWeight / 1000) * pp;
+        const electricity = t * (power / 1000) * rate;
+        const amortization = t * getAmortizationPerHour();
+
+        const resourceCosts = plastic + electricity + amortization;
+        const sumBeforeDefect = resourceCosts;
+        const defectCost = sumBeforeDefect * (defectPct / 100);
+        const totalCost = sumBeforeDefect + defectCost + pack;
         return { resourceCosts, sumBeforeDefect, defectCost, totalCost, defectPct };
       }
 
@@ -493,8 +512,8 @@
       }
 
       function getPrice() {
-        var cost = getCost();
-        var m = num(markup.value);
+        const cost = getCost();
+        const m = num(markup.value);
         return cost * (1 + m / 100);
       }
 
@@ -502,14 +521,15 @@
         if (multicolor.checked && !wasteWeightManual) {
           wasteWeightInput.value = getCalculatedWasteWeight().toFixed(1);
         }
-        var b = getCostBreakdown();
-        var priceRub = getPrice();
+        const b = getCostBreakdown();
+        const price = getPrice();
+
         resultResources.textContent = formatMoney(b.resourceCosts);
         resultBeforeDefect.textContent = formatMoney(b.sumBeforeDefect);
         resultDefectPct.textContent = b.defectPct;
         resultDefectCost.textContent = formatMoney(b.defectCost);
         costResult.textContent = formatMoney(b.totalCost);
-        priceResult.textContent = formatMoney(priceRub);
+        priceResult.textContent = formatMoney(price);
       }
 
       function syncMulticolorUI() {
@@ -529,11 +549,19 @@
         update();
       });
 
-      wasteWeightInput.addEventListener('input', function() { wasteWeightManual = true; update(); });
-      wasteWeightInput.addEventListener('change', function() { wasteWeightManual = true; update(); });
+      wasteWeightInput.addEventListener('input', function() {
+        wasteWeightManual = true;
+        update();
+      });
+      wasteWeightInput.addEventListener('change', function() {
+        wasteWeightManual = true;
+        update();
+      });
 
       [colorCount, colorChangeLayers, purgePerChange].forEach(function(el) {
-        el.addEventListener('change', function() { wasteWeightManual = false; });
+        el.addEventListener('change', function() {
+          wasteWeightManual = false;
+        });
       });
 
       [printers, weight, plasticPrice, time, electricityRate, packaging, defect, markup, colorCount, colorChangeLayers, purgePerChange, wasteWeightInput, primeTowerWeight].forEach(function(el) {
@@ -566,11 +594,11 @@
       });
 
       copyBtn.addEventListener('click', function() {
-        var w = num(weight.value);
-        var t = num(time.value);
-        var priceRub = getPrice();
-        var displayPrice = selectedCurrency === '₽' ? Math.round(priceRub) : selectedCurrency === '$' ? Math.round(priceRub * rateUsdPerRub) : Math.round(priceRub * rateEurPerRub);
-        var text = '📦 Расчет заказа:\n- Модель: ' + w + 'г.\n- Время: ' + t + 'ч.\n💰 Итоговая стоимость: ' + displayPrice + ' ' + selectedCurrency;
+        const w = num(weight.value);
+        const t = num(time.value);
+        const price = getPrice();
+        const displayPrice = Math.round(price).toLocaleString('ru-RU');
+        const text = '📦 Расчет заказа:\n- Модель: ' + w + 'г.\n- Время: ' + t + 'ч.\n💰 Итоговая стоимость: ' + displayPrice + ' ' + selectedCurrency;
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(text).then(function() {
             copyBtn.textContent = 'Скопировано!';
@@ -582,7 +610,7 @@
       });
 
       function fallbackCopy(str) {
-        var ta = document.createElement('textarea');
+        const ta = document.createElement('textarea');
         ta.value = str;
         ta.style.position = 'fixed';
         ta.style.opacity = '0';
