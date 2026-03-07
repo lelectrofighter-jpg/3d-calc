@@ -339,6 +339,39 @@
       border-color: rgba(45,217,143,0.18);
     }
 
+    .exp-hint {
+      margin-top: 6px;
+      font-size: 10px;
+      line-height: 1.4;
+      color: rgba(148,163,184,0.9);
+      letter-spacing: 0.01em;
+    }
+
+    .open-browser-btn {
+      display: none;
+      margin: 6px 0 4px;
+      width: 100%;
+      border-radius: 12px;
+      border: 1px dashed rgba(148,163,184,0.4);
+      background: rgba(15,23,42,0.88);
+      color: rgba(226,232,240,0.9);
+      font-family: var(--font-head);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 8px 10px;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .open-browser-btn:active {
+      background: rgba(30,64,175,0.8);
+      transform: scale(0.97);
+    }
+
     /* MAIN BUTTONS */
     .btn-row { display: flex; gap: 5px; }
     .btn {
@@ -502,9 +535,13 @@
       </div>
       <div class="exp-confirm-wrap">
         <button class="exp-confirm" id="expConfirm" disabled>🚀 ПОДТВЕРДИТЬ И СКАЧАТЬ</button>
+        <div class="exp-hint" id="expHint" style="display:none">
+          Если не качает, нажмите «Открыть в браузере» в меню Telegram или по кнопке ниже.
+        </div>
       </div>
     </div>
 
+    <button class="open-browser-btn" id="btnOpenBrowser">🌐 Открыть в браузере</button>
     <div class="btn-row">
       <button class="btn" id="btnReset">🔄 Сброс</button>
       <button class="btn" id="btnWire">⬡ Сетка</button>
@@ -987,6 +1024,24 @@
   function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(showToast._t);showToast._t=setTimeout(()=>t.classList.remove('show'),3500);}
 
   setupExportPanel();
+
+  // Кнопка "Открыть в браузере" и подсказка только внутри Telegram WebApp
+  if(tg){
+    const btnOpen=document.getElementById('btnOpenBrowser');
+    if(btnOpen){
+      btnOpen.style.display='flex';
+      btnOpen.addEventListener('click',()=>{
+        try{
+          window.Telegram.WebApp.openLink(window.location.href,{tryBrowser:'chrome'});
+        }catch(e){
+          window.open(window.location.href,'_blank');
+        }
+      });
+    }
+    const hint=document.getElementById('expHint');
+    if(hint) hint.style.display='block';
+  }
+
   initThree();buildSwatches();
 })();
 </script>
