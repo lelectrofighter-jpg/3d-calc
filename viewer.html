@@ -361,7 +361,6 @@
 
     /* Обновление трека слайдера при вводе */
     input[type=range] { touch-action: none; }
-
   </style>
 </head>
 <body>
@@ -687,38 +686,18 @@
     document.getElementById('progFill').style.width=p+'%';
   }
 
-  // ЭКСПОРТ (совместимо с Telegram WebApp)
+  // ЭКСПОРТ
   window.doExport=function(src,fmt){
     const geo=src==='vox'?getVoxGeo():mainGeo;
     if(!geo){showToast('Нет модели');return;}
-
     const base=(document.getElementById('hudName').textContent||'model').replace(/\.[^.]+$/,'');
     const sfx=src==='vox'?'_vox':'';
     let blob,name;
-
-    // Всегда используем application/octet-stream, чтобы форсировать скачивание
-    const mime='application/octet-stream';
-    if(fmt==='stl'){
-      blob=new Blob([toSTL(geo)],{type:mime});
-      name=base+sfx+'.stl';
-    }else if(fmt==='obj'){
-      blob=new Blob([toOBJ(geo)],{type:mime});
-      name=base+sfx+'.obj';
-    }else{
-      blob=new Blob([toGLB(geo)],{type:mime});
-      name=base+'.glb';
-    }
-
+    if(fmt==='stl'){blob=new Blob([toSTL(geo)],{type:'application/octet-stream'});name=base+sfx+'.stl';}
+    else if(fmt==='obj'){blob=new Blob([toOBJ(geo)],{type:'text/plain'});name=base+sfx+'.obj';}
+    else{blob=new Blob([toGLB(geo)],{type:'model/gltf-binary'});name=base+'.glb';}
     const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url;
-    a.download=name;
-
-    // Для мобильных WebView (Telegram, iOS/Android) ссылка должна быть в DOM
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-
+    const a=document.createElement('a');a.href=url;a.download=name;a.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
     showToast('💾 '+name);
   };
