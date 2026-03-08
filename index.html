@@ -980,7 +980,7 @@
       var pname = window._projectGetName ? window._projectGetName() : null;
       var markup2 = num(document.getElementById('markup').value||'0');
       var lines = pparts.map(function(p){
-        return '  🖨 '+p.printerName+': '+p.weight+'г, '+p.time+'ч → '+(window._rubToCurrent?window._rubToCurrent(p.costRub||p.cost).toFixed(2):p.cost.toFixed(2))+' '+selectedCurrency;
+        return '  🖨 '+p.printerName+': '+p.weight+'г, '+p.time+'ч';
       }).join('\n');
       var totalDisp = window._rubToCurrent ? window._rubToCurrent(ptotal*(1+markup2/100)).toFixed(2) : ptotal.toFixed(2);
       var text = '📦 Проект'+(pname?' "'+pname+'"':'')+ ':\n'+lines+'\n💰 Итого: '+totalDisp+' '+selectedCurrency;
